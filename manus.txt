@@ -1,0 +1,450 @@
+# Manus AI Prompt - Gemma Hallucination Visualizer
+
+Create a comprehensive React TypeScript web application for visualizing and analyzing LLM hallucination patterns across multiple dimensions. This application will serve as a research tool for analyzing accuracy patterns in Gemma language models (1B, 4B, 27B).
+
+## Project Specification
+Build "Gemma Hallucination Visualizer" - an interactive data visualization dashboard that processes JSON datasets of model evaluation results and provides sophisticated analysis through geographic visualization, smart filtering, and detailed event exploration.
+
+## Application Architecture
+
+### Core Technology Stack
+```typescript
+// Required dependencies
+{
+  "react": "^18.0.0",
+  "typescript": "^5.0.0", 
+  "tailwindcss": "^3.0.0",
+  "@headlessui/react": "^1.7.0",
+  "@heroicons/react": "^2.0.0",
+  "react-leaflet": "^4.0.0",
+  "leaflet": "^1.9.0",
+  "recharts": "^2.8.0",
+  "zustand": "^4.4.0",
+  "clsx": "^2.0.0"
+}
+```
+
+### Data Model
+Process JSON files containing evaluation results with this structure:
+```typescript
+interface EventData {
+  model_name: "gemma3:1b" | "gemma3:4b" | "gemma3:27b";
+  event: {
+    text: string;
+    year: number;
+    date: string;
+    primary_category: "Military & Warfare" | "Politics & Government" | "Science & Technology" | "Arts & Culture" | "Disasters & Accidents" | "Sports & Recreation" | "Economics & Business" | "Religion & Philosophy";
+    violence_level: "peaceful" | "violent" | "catastrophic";
+    scale: "local" | "national" | "international" | "global";
+    human_impact: "individual" | "small group" | "mass population";
+    continental: "North America" | "South America" | "Europe" | "Asia" | "Africa" | "Oceania";
+    cultural_region: "Western" | "Eastern" | "Middle Eastern" | "African" | "Latin American";
+    development_status: "developed" | "developing";
+    colonial_status: "colonial" | "independent";
+    century: "Pre-1500" | "1500-1699" | "1700-1799" | "1800-1899" | "1900-1999" | "2000+";
+    decade: "1500s" | "1510s" | "1520s" | /* ... all decades through */ "2020s";
+    seasonal: "Winter" | "Spring" | "Summer" | "Fall";
+    historical_period: "Ancient" | "Medieval" | "Renaissance" | "Industrial" | "Modern" | "Contemporary";
+  };
+  question: string;
+  model_response: string;
+  extracted_year: number;
+  is_correct: boolean;
+  confidence_score: number;
+}
+```
+
+## Application Layout & UI Design
+
+### Main Interface Structure
+Create a professional, research-focused interface with:
+
+**Desktop Layout (1024px+):**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Header: "Gemma Hallu Visualizer" | Model Selector | Export      │
+├─────────────────────────────────────────────────────────────────┤
+│ Sidebar │         Interactive World Map         │ Results Panel │
+│ (320px) │                                       │   (Charts &   │
+│         │    Color-coded accuracy regions       │   Metrics)    │
+│ Smart   │                                       │               │
+│ Filter  │ ┌─────────────────────────────────┐   │ ┌───────────┐ │  
+│ Groups: │ │     🗺️ Geographic Visualization │   │ │ Overall   │ │
+│         │ │                                 │   │ │Accuracy   │ │
+│ 📍 Geo  │ │ Green: High accuracy (80%+)     │   │ │  67.3%    │ │
+│ ⏰ Time │ │ Yellow: Medium (50-80%)         │   │ │           │ │
+│ 🏛️ Event│ │ Red: Low accuracy (<50%)        │   │ │ Events:   │ │
+│ 🌍 Social│ │                                │   │ │  1,247    │ │
+│         │ └─────────────────────────────────┘   │ │           │ │
+│ [Active │                                       │ │ Avg Conf: │ │
+│ Filters]│   [Map Controls] [Legend]             │ │   0.73    │ │
+│         │                                       │ └───────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Smart Progressive Filter System
+Implement 4 main filter categories with progressive disclosure:
+
+**Filter Group Architecture:**
+```typescript
+interface FilterGroupConfig {
+  id: string;
+  icon: string;
+  title: string;
+  description: string;
+  filters: Record<string, FilterOption[]>;
+  smartLogic?: SmartFilterLogic;
+}
+
+const FILTER_GROUPS: FilterGroupConfig[] = [
+  {
+    id: "geographic",
+    icon: "📍",
+    title: "Geographic Analysis",
+    description: "Filter by continental regions and cultural contexts",
+    filters: {
+      continental: ["North America", "South America", "Europe", "Asia", "Africa", "Oceania"],
+      cultural_region: ["Western", "Eastern", "Middle Eastern", "African", "Latin American"],
+      development_status: ["developed", "developing"],
+      colonial_status: ["colonial", "independent"]
+    },
+    smartLogic: {
+      // When continent selected, pre-filter cultural regions
+      dependencies: ["continental -> cultural_region"]
+    }
+  },
+  {
+    id: "temporal",
+    icon: "⏰", 
+    title: "Time Period Analysis",
+    description: "Analyze patterns across historical periods",
+    filters: {
+      century: ["Pre-1500", "1500-1699", "1700-1799", "1800-1899", "1900-1999", "2000+"],
+      decade: [/* All decades 1500s through 2020s - 52 options */],
+      historical_period: ["Ancient", "Medieval", "Renaissance", "Industrial", "Modern", "Contemporary"],
+      seasonal: ["Winter", "Spring", "Summer", "Fall"]
+    },
+    smartLogic: {
+      // Century selection filters relevant decades
+      dependencies: ["century -> decade", "historical_period -> century"]
+    }
+  },
+  {
+    id: "event_characteristics", 
+    icon: "🏛️",
+    title: "Event Properties",
+    description: "Filter by event type and characteristics",
+    filters: {
+      primary_category: ["Military & Warfare", "Politics & Government", "Science & Technology", "Arts & Culture", "Disasters & Accidents", "Sports & Recreation", "Economics & Business", "Religion & Philosophy"],
+      violence_level: ["peaceful", "violent", "catastrophic"],
+      scale: ["local", "national", "international", "global"],
+      human_impact: ["individual", "small group", "mass population"]
+    },
+    smartLogic: {
+      // Categories suggest typical violence levels
+      suggestions: ["primary_category -> violence_level"]
+    }
+  },
+  {
+    id: "societal_context",
+    icon: "🌍", 
+    title: "Societal Factors",
+    description: "Contextual societal and temporal factors",
+    filters: {
+      development_status: ["developed", "developing"],
+      colonial_status: ["colonial", "independent"],
+      seasonal: ["Winter", "Spring", "Summer", "Fall"]
+    }
+  }
+];
+```
+
+## Core Component Implementation
+
+### 1. Application State Management
+```typescript
+// store/appStore.ts
+interface AppState {
+  // Data management
+  rawData: Record<string, EventData[]>;
+  filteredData: EventData[];
+  isLoading: boolean;
+  error: string | null;
+  
+  // UI state
+  selectedModel: string;
+  activeFilters: Record<string, string[]>;
+  expandedFilterGroups: Set<string>;
+  selectedEvent: EventData | null;
+  mapRegion: string | null;
+  
+  // Computed data
+  accuracyByRegion: Record<string, number>;
+  categoryStats: CategoryStats[];
+  confidenceDistribution: DistributionData[];
+  
+  // Actions
+  loadModelData: (model: string) => Promise<void>;
+  applyFilters: (group: string, filters: string[]) => void;
+  toggleFilterGroup: (groupId: string) => void;
+  selectEvent: (event: EventData | null) => void;
+  exportData: (format: 'csv' | 'json') => void;
+  resetFilters: (group?: string) => void;
+}
+```
+
+### 2. Smart Filter Components
+```typescript
+// components/filters/FilterGroup.tsx
+interface FilterGroupProps {
+  group: FilterGroupConfig;
+  activeFilters: string[];
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  onFilterChange: (filters: string[]) => void;
+  onClear: () => void;
+}
+
+// components/filters/SmartFilterSidebar.tsx
+const SmartFilterSidebar: React.FC = () => {
+  return (
+    <div className="w-80 bg-slate-50 border-r border-slate-200 h-full overflow-y-auto">
+      <div className="p-6">
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">
+          Analysis Filters
+        </h2>
+        
+        {FILTER_GROUPS.map(group => (
+          <FilterGroup
+            key={group.id}
+            group={group}
+            activeFilters={activeFilters[group.id] || []}
+            isExpanded={expandedGroups.has(group.id)}
+            onToggleExpand={() => toggleFilterGroup(group.id)}
+            onFilterChange={filters => applyFilters(group.id, filters)}
+            onClear={() => resetFilters(group.id)}
+          />
+        ))}
+        
+        <div className="mt-6 pt-6 border-t border-slate-200">
+          <button
+            onClick={() => resetFilters()}
+            className="w-full px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50"
+          >
+            Clear All Filters
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+
+### 3. Interactive World Map
+```typescript
+// components/map/WorldMap.tsx
+interface WorldMapProps {
+  accuracyData: Record<string, number>;
+  onRegionClick: (region: string) => void;
+  isLoading: boolean;
+}
+
+const WorldMap: React.FC<WorldMapProps> = ({ accuracyData, onRegionClick, isLoading }) => {
+  const getRegionColor = (accuracy: number): string => {
+    if (accuracy >= 0.8) return "#10b981"; // Emerald - High accuracy
+    if (accuracy >= 0.5) return "#f59e0b"; // Amber - Medium accuracy  
+    if (accuracy > 0) return "#ef4444";    // Red - Low accuracy
+    return "#9ca3af";                      // Gray - No data
+  };
+
+  return (
+    <div className="relative h-full bg-white rounded-lg shadow-sm border border-slate-200">
+      {isLoading && (
+        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      )}
+      
+      <MapContainer
+        center={[20, 0]}
+        zoom={2}
+        className="h-full w-full rounded-lg"
+      >
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution="© OpenStreetMap contributors"
+        />
+        
+        {/* Region layers with accuracy-based coloring */}
+        {Object.entries(accuracyData).map(([region, accuracy]) => (
+          <RegionLayer
+            key={region}
+            region={region}
+            accuracy={accuracy}
+            color={getRegionColor(accuracy)}
+            onClick={() => onRegionClick(region)}
+          />
+        ))}
+        
+        <MapLegend />
+        <MapControls />
+      </MapContainer>
+    </div>
+  );
+};
+```
+
+### 4. Results Dashboard
+```typescript
+// components/dashboard/ResultsDashboard.tsx
+interface ResultsDashboardProps {
+  stats: {
+    accuracy: number;
+    totalEvents: number;
+    avgConfidence: number;
+  };
+  chartData: {
+    categoryAccuracy: CategoryData[];
+    confidenceDistribution: DistributionData[];
+    timelineData: TimelineData[];
+  };
+}
+
+const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ stats, chartData }) => {
+  return (
+    <div className="w-96 bg-white border-l border-slate-200 h-full overflow-y-auto">
+      <div className="p-6">
+        <h2 className="text-lg font-semibold text-slate-900 mb-6">
+          Analysis Results
+        </h2>
+        
+        {/* Key Metrics */}
+        <div className="grid grid-cols-1 gap-4 mb-8">
+          <MetricCard
+            title="Overall Accuracy"
+            value={`${(stats.accuracy * 100).toFixed(1)}%`}
+            subtitle={`${stats.totalEvents} events analyzed`}
+            trend={stats.accuracy > 0.7 ? 'up' : stats.accuracy > 0.5 ? 'neutral' : 'down'}
+          />
+          <MetricCard
+            title="Average Confidence"
+            value={stats.avgConfidence.toFixed(2)}
+            subtitle="Model confidence score"
+          />
+        </div>
+        
+        {/* Charts */}
+        <div className="space-y-8">
+          <div>
+            <h3 className="text-sm font-medium text-slate-900 mb-3">
+              Accuracy by Category
+            </h3>
+            <AccuracyByCategory data={chartData.categoryAccuracy} />
+          </div>
+          
+          <div>
+            <h3 className="text-sm font-medium text-slate-900 mb-3">
+              Confidence Distribution
+            </h3>
+            <ConfidenceHistogram data={chartData.confidenceDistribution} />
+          </div>
+          
+          <div>
+            <h3 className="text-sm font-medium text-slate-900 mb-3">
+              Timeline Analysis
+            </h3>
+            <TimelineChart data={chartData.timelineData} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+
+### 5. Event Detail Modal
+```typescript
+// components/modals/EventModal.tsx
+interface EventModalProps {
+  event: EventData | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onNavigate: (direction: 'prev' | 'next') => void;
+  canNavigate: { prev: boolean; next: boolean };
+}
+
+const EventModal: React.FC<EventModalProps> = ({ 
+  event, 
+  isOpen, 
+  onClose, 
+  onNavigate, 
+  canNavigate 
+}) => {
+  if (!event) return null;
+
+  return (
+    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
+      <div className="fixed inset-0 bg-black bg-opacity-25" />
+      
+      <div className="fixed inset-0 overflow-y-auto">
+        <div className="flex min-h-full items-center justify-center p-4">
+          <Dialog.Panel className="w-full max-w-2xl bg-white rounded-lg shadow-xl">
+            <div className="px-6 py-4 border-b border-slate-200">
+              <Dialog.Title className="text-lg font-semibold text-slate-900">
+                Event Analysis
+              </Dialog.Title>
+            </div>
+            
+            <div className="px-6 py-6">
+              {/* Event Details */}
+              <div className="mb-6">
+                <p className="text-slate-900 text-base leading-relaxed mb-4">
+                  {event.event.text}
+                </p>
+                
+                <div className="flex items-center space-x-4 mb-4">
+                  <div className="flex items-center">
+                    <span className="text-sm font-medium text-slate-700">Ground Truth:</span>
+                    <span className="ml-2 text-sm text-slate-900">{event.event.year}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="text-sm font-medium text-slate-700">Model Response:</span>
+                    <span className="ml-2 text-sm text-slate-900">{event.model_response}</span>
+                  </div>
+                  <div className={`flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                    event.is_correct 
+                      ? 'bg-emerald-100 text-emerald-800' 
+                      : 'bg-red-100 text-red-800'
+                  }`}>
+                    {event.is_correct ? '✅ Correct' : '❌ Incorrect'}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Metadata */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <MetadataBadge label="Category" value={event.event.primary_category} />
+                <MetadataBadge label="Violence Level" value={event.event.violence_level} />
+                <MetadataBadge label="Cultural Region" value={event.event.cultural_region} />
+                <MetadataBadge label="Historical Period" value={event.event.historical_period} />
+                <MetadataBadge label="Confidence" value={event.confidence_score.toFixed(2)} />
+              </div>
+            </div>
+            
+            {/* Navigation & Actions */}
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-between">
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => onNavigate('prev')}
+                  disabled={!canNavigate.prev}
+                  className="px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50"
+                >
+                  ← Previous
+                </button>
+                <button
+                  onClick={() => onNavigate('next')}
+                  disabled={!canNavigate.next}
+                  className="px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Next →
+(Content truncated due to size limit. Use page ranges or line ranges to read remaining content)

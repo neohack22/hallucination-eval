@@ -1,0 +1,430 @@
+# OpenAI Codex Prompt - Gemma Hallucination Visualizer
+
+Generate a complete React TypeScript web application called "Gemma Hallucination Visualizer" for analyzing LLM accuracy patterns across multiple dimensions with an interactive world map and smart filtering system.
+
+## Application Overview
+Build a data visualization dashboard that loads JSON datasets of Gemma model evaluation results (1B, 4B, 27B) and provides interactive analysis through geographic visualization, progressive filtering, and detailed event exploration.
+
+## Data Structure
+The application processes JSON files with this event structure:
+```typescript
+interface EventData {
+  model_name: "gemma3:1b" | "gemma3:4b" | "gemma3:27b";
+  event: {
+    text: string;
+    year: number;
+    date: string;
+    primary_category: "Military & Warfare" | "Politics & Government" | "Science & Technology" | "Arts & Culture" | "Disasters & Accidents" | "Sports & Recreation" | "Economics & Business" | "Religion & Philosophy";
+    violence_level: "peaceful" | "violent" | "catastrophic";
+    cultural_region: "Western" | "Eastern" | "Middle Eastern" | "African" | "Latin American";
+    historical_period: "Ancient" | "Medieval" | "Renaissance" | "Industrial" | "Modern" | "Contemporary";
+  };
+  question: string;
+  model_response: string;
+  extracted_year: number;
+  is_correct: boolean;
+  confidence_score: number;
+}
+```
+
+## Core Requirements
+
+### 1. Project Setup
+```bash
+# Initialize React TypeScript project
+npx create-react-app gemma-hallu-visualizer --template typescript
+cd gemma-hallu-visualizer
+
+# Install dependencies
+npm install tailwindcss @headlessui/react @heroicons/react
+npm install react-leaflet leaflet @types/leaflet
+npm install recharts zustand clsx
+npm install -D @tailwindcss/forms @tailwindcss/typography
+```
+
+### 2. Application Architecture
+Create a desktop-first layout with responsive breakpoints:
+
+**Main Layout Components:**
+- Header with logo, model selector, export button
+- Left sidebar (320px) with smart filter groups
+- Center area (60%) with interactive world map
+- Right panel (40%) with results dashboard
+
+### 3. Smart Filter System
+Implement progressive disclosure filter system with 4 main categories:
+
+```typescript
+// Filter configuration
+const FILTER_GROUPS = {
+  geographic: {
+    icon: "📍",
+    title: "Geographic",
+    filters: {
+      continental: ["North America", "South America", "Europe", "Asia", "Africa", "Oceania"],
+      cultural_region: ["Western", "Eastern", "Middle Eastern", "African", "Latin American"]
+    }
+  },
+  temporal: {
+    icon: "⏰", 
+    title: "Temporal",
+    filters: {
+      century: ["Pre-1500", "1500-1699", "1700-1799", "1800-1899", "1900-1999", "2000+"],
+      decade: ["1500s", "1510s", /* ... all decades through 2020s */],
+      historical_period: ["Ancient", "Medieval", "Renaissance", "Industrial", "Modern", "Contemporary"]
+    }
+  },
+  event_characteristics: {
+    icon: "🏛️",
+    title: "Event Characteristics", 
+    filters: {
+      primary_category: ["Military & Warfare", "Politics & Government", "Science & Technology", "Arts & Culture", "Disasters & Accidents", "Sports & Recreation", "Economics & Business", "Religion & Philosophy"],
+      violence_level: ["peaceful", "violent", "catastrophic"],
+      scale: ["local", "national", "international", "global"],
+      human_impact: ["individual", "small group", "mass population"]
+    }
+  },
+  societal_context: {
+    icon: "🌍",
+    title: "Societal Context",
+    filters: {
+      development_status: ["developed", "developing"],
+      colonial_status: ["colonial", "independent"], 
+      seasonal: ["Winter", "Spring", "Summer", "Fall"]
+    }
+  }
+};
+```
+
+### 4. Component Structure
+Generate these key components:
+
+```typescript
+// components/Header.tsx
+interface HeaderProps {
+  selectedModel: string;
+  onModelChange: (model: string) => void;
+  onExport: () => void;
+}
+
+// components/FilterSidebar.tsx  
+interface FilterSidebarProps {
+  filters: FilterState;
+  onFilterChange: (group: string, filter: string, checked: boolean) => void;
+  onClearFilters: (group?: string) => void;
+}
+
+// components/WorldMap.tsx
+interface WorldMapProps {
+  data: ProcessedMapData[];
+  onRegionClick: (region: string) => void;
+}
+
+// components/ResultsDashboard.tsx
+interface DashboardProps {
+  accuracy: number;
+  totalEvents: number;
+  avgConfidence: number;
+  chartData: ChartData[];
+}
+
+// components/EventModal.tsx
+interface EventModalProps {
+  event: EventData | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onNavigate: (direction: 'prev' | 'next') => void;
+}
+```
+
+### 5. State Management with Zustand
+```typescript
+// store/appStore.ts
+interface AppState {
+  // Data
+  allData: Record<string, EventData[]>;
+  filteredData: EventData[];
+  
+  // UI State
+  selectedModel: string;
+  activeFilters: FilterState;
+  expandedGroups: string[];
+  selectedEvent: EventData | null;
+  
+  // Actions
+  loadData: () => Promise<void>;
+  setModel: (model: string) => void;
+  toggleFilter: (group: string, filter: string) => void;
+  toggleGroup: (group: string) => void;
+  selectEvent: (event: EventData | null) => void;
+  clearFilters: (group?: string) => void;
+}
+```
+
+### 6. Interactive World Map Implementation
+Using React-Leaflet, create a world map that:
+- Colors countries based on accuracy rates
+- Shows tooltips on hover with stats
+- Opens region detail modal on click
+- Includes zoom controls and legend
+
+```typescript
+// utils/mapUtils.ts
+const getAccuracyColor = (accuracy: number): string => {
+  if (accuracy >= 0.8) return "#10b981"; // Green - High accuracy
+  if (accuracy >= 0.5) return "#f59e0b"; // Yellow - Medium accuracy  
+  if (accuracy > 0) return "#ef4444";    // Red - Low accuracy
+  return "#9ca3af";                      // Gray - No data
+};
+
+const calculateRegionalAccuracy = (data: EventData[], region: string) => {
+  const regionData = data.filter(d => d.event.cultural_region === region);
+  const correct = regionData.filter(d => d.is_correct).length;
+  return regionData.length > 0 ? correct / regionData.length : 0;
+};
+```
+
+### 7. Results Dashboard with Charts
+Create dashboard with key metrics and visualizations:
+
+```typescript
+// components/dashboard/MetricCard.tsx
+interface MetricCardProps {
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  trend?: 'up' | 'down' | 'neutral';
+}
+
+// components/dashboard/AccuracyChart.tsx - Bar chart by category
+// components/dashboard/ConfidenceChart.tsx - Histogram of confidence scores
+// components/dashboard/TimelineChart.tsx - Accuracy over time periods
+```
+
+### 8. Data Processing & Filtering
+Implement efficient data handling:
+
+```typescript
+// utils/dataProcessing.ts
+class DataProcessor {
+  private data: Record<string, EventData[]> = {};
+  private indices: Map<string, Set<number>> = new Map();
+  
+  async loadData() {
+    // Load JSON files for each model
+    const models = ['1b', '4b', '27b'];
+    for (const model of models) {
+      const response = await fetch(`/data/results_gemma3_${model}.json`);
+      this.data[`gemma3:${model}`] = await response.json();
+    }
+    this.buildIndices();
+  }
+  
+  buildIndices() {
+    // Create indices for fast filtering
+    // Index by category, region, time period, etc.
+  }
+  
+  filterData(model: string, filters: FilterState): EventData[] {
+    // Apply multiple filter criteria efficiently
+    // Return filtered dataset in < 500ms
+  }
+  
+  calculateStats(data: EventData[]) {
+    return {
+      accuracy: data.filter(d => d.is_correct).length / data.length,
+      totalEvents: data.length,
+      avgConfidence: data.reduce((sum, d) => sum + d.confidence_score, 0) / data.length
+    };
+  }
+}
+```
+
+### 9. Responsive Design Breakpoints
+```css
+/* Tailwind responsive classes */
+.desktop-layout {
+  @apply hidden lg:flex lg:h-screen;
+}
+
+.tablet-layout {
+  @apply hidden md:flex md:flex-col lg:hidden;
+}
+
+.mobile-layout {
+  @apply flex flex-col md:hidden;
+}
+
+.filter-sidebar {
+  @apply w-80 bg-slate-50 lg:block;
+  /* Mobile: bottom sheet */
+  @apply fixed bottom-0 left-0 right-0 md:relative md:w-full lg:w-80;
+}
+```
+
+### 10. Animation & Micro-interactions
+Add smooth transitions:
+
+```typescript
+// Animation configuration
+const ANIMATIONS = {
+  filterExpand: "transition-all duration-300 ease-out",
+  mapUpdate: "transition-colors duration-200",
+  dashboardUpdate: "transition-all duration-400 ease-in-out",
+  modal: "transition-all duration-300 ease-out",
+};
+
+// Loading states with shimmer
+const ShimmerPlaceholder = () => (
+  <div className="animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 bg-[length:200%_100%] animate-shimmer" />
+);
+```
+
+### 11. Accessibility Implementation
+Ensure WCAG 2.1 AA compliance:
+
+```typescript
+// Keyboard navigation
+const useKeyboardNavigation = () => {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      switch (e.key) {
+        case 'Escape':
+          // Close modals/dropdowns
+          break;
+        case 'Tab':
+          // Manage focus order
+          break;
+        case 'Enter':
+        case ' ':
+          // Activate focused elements
+          break;
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+};
+
+// ARIA labels and roles
+<div
+  role="region"
+  aria-labelledby="results-heading"
+  aria-live="polite"
+>
+  <h2 id="results-heading">Analysis Results</h2>
+  {/* Dashboard content */}
+</div>
+```
+
+### 12. Export Functionality
+```typescript
+// utils/exportUtils.ts
+export const exportToCSV = (data: EventData[], filename: string) => {
+  const headers = ['model_name', 'event_text', 'year', 'category', 'is_correct', 'confidence_score'];
+  const csvContent = [
+    headers.join(','),
+    ...data.map(row => headers.map(field => `"${row[field] || ''}"`).join(','))
+  ].join('\n');
+  
+  const blob = new Blob([csvContent], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+};
+
+export const exportToJSON = (data: any, filename: string) => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+};
+```
+
+## Performance Requirements
+- Initial load time < 3 seconds
+- Filter operations complete in < 500ms
+- Smooth 60fps animations
+- Memory usage < 100MB for full dataset
+- Bundle size < 500KB gzipped
+
+## File Structure to Generate
+```
+src/
+├── components/
+│   ├── layout/
+│   │   ├── Header.tsx
+│   │   ├── Layout.tsx
+│   │   └── Sidebar.tsx
+│   ├── filters/
+│   │   ├── FilterGroup.tsx
+│   │   ├── FilterSidebar.tsx
+│   │   ├── FilterChip.tsx
+│   │   └── SearchableFilter.tsx
+│   ├── map/
+│   │   ├── WorldMap.tsx
+│   │   ├── MapTooltip.tsx
+│   │   ├── MapLegend.tsx
+│   │   └── RegionLayer.tsx
+│   ├── dashboard/
+│   │   ├── ResultsDashboard.tsx
+│   │   ├── MetricCard.tsx
+│   │   ├── AccuracyChart.tsx
+│   │   ├── ConfidenceChart.tsx
+│   │   └── CategoryBreakdown.tsx
+│   ├── modals/
+│   │   ├── EventModal.tsx
+│   │   ├── RegionModal.tsx
+│   │   └── ExportModal.tsx
+│   └── ui/
+│       ├── Button.tsx
+│       ├── Dropdown.tsx
+│       ├── Modal.tsx
+│       ├── LoadingSpinner.tsx
+│       └── Tooltip.tsx
+├── hooks/
+│   ├── useData.ts
+│   ├── useFilters.ts
+│   ├── useKeyboard.ts
+│   └── useLocalStorage.ts
+├── store/
+│   └── appStore.ts
+├── utils/
+│   ├── dataProcessing.ts
+│   ├── mapUtils.ts
+│   ├── exportUtils.ts
+│   └── constants.ts
+├── types/
+│   ├── data.ts
+│   ├── filters.ts
+│   └── map.ts
+└── styles/
+    ├── globals.css
+    └── components.css
+```
+
+## Success Criteria
+Generate a production-ready application that:
+✅ Loads three Gemma model datasets (1B, 4B, 27B)
+✅ Provides responsive filtering across 60+ parameters  
+✅ Displays interactive world map with regional accuracy
+✅ Updates visualizations efficiently (< 500ms)
+✅ Works across desktop, tablet, mobile devices
+✅ Meets WCAG 2.1 AA accessibility standards
+✅ Includes comprehensive export functionality
+✅ Handles edge cases and errors gracefully
+
+## Implementation Notes
+- Use TypeScript strict mode for type safety
+- Implement proper error boundaries for robust error handling
+- Add comprehensive loading states for better UX
+- Use React.memo and useMemo for performance optimization
+- Implement proper cleanup in useEffect hooks
+- Add unit tests for critical data processing functions
+
+Generate clean, production-ready code with proper TypeScript types, comprehensive error handling, and optimal performance characteristics. Focus on maintainable architecture that can easily accommodate future enhancements.

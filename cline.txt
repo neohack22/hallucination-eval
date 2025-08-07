@@ -1,0 +1,359 @@
+# Cline AI Prompt - Gemma Hallucination Visualizer
+
+I need you to build a comprehensive data visualization web application called "Gemma Hallucination Visualizer" that analyzes LLM accuracy patterns across multiple dimensions. This is a research tool for analyzing hallucination patterns in Gemma language models.
+
+## Project Overview
+Create a React TypeScript application that loads JSON datasets of LLM evaluation results and provides an interactive interface for exploring accuracy patterns through:
+- Interactive world map visualization
+- Smart progressive filtering system  
+- Model comparison capabilities
+- Detailed event analysis
+
+## Reference Documentation
+Use the complete specification document at `docs/front-end-spec.md` as your comprehensive guide for all implementation details, design patterns, and technical requirements.
+
+## Existing Data Structure
+The project contains JSON files with evaluation results:
+- `results_gemma3_1b.json`
+- `results_gemma3_4b.json` 
+- `results_gemma3_27b.json`
+
+Each event follows this structure:
+```json
+{
+  "model_name": "gemma3:4b",
+  "event": {
+    "text": "British diplomat Lord Ismay was appointed the first secretary general of NATO.",
+    "year": 1952,
+    "date": "1952-03-12",
+    "primary_category": "Politics & Government", 
+    "violence_level": "peaceful",
+    "cultural_region": "Western",
+    "historical_period": "Modern"
+  },
+  "question": "What year did this event occur: British diplomat Lord Ismay was appointed the first secretary general of NATO.?",
+  "model_response": "1949",
+  "extracted_year": 1949,
+  "is_correct": false,
+  "confidence_score": 0.6
+}
+```
+
+## Implementation Requirements
+
+### 1. Project Setup & Architecture
+Set up a modern React application with:
+```bash
+# Create React TypeScript project
+npx create-react-app gemma-hallu-visualizer --template typescript
+cd gemma-hallu-visualizer
+
+# Install required dependencies
+npm install tailwindcss @headlessui/react @heroicons/react
+npm install react-leaflet leaflet @types/leaflet
+npm install recharts zustand
+npm install @tailwindcss/forms @tailwindcss/typography
+```
+
+### 2. Core Application Layout
+Implement the main interface layout per specification:
+
+**Desktop Layout (1024px+):**
+```
+Header: Logo + Model Selector + Export Button
+├── Left Sidebar (320px): Smart Filter Groups
+├── Center (60%): Interactive World Map  
+└── Right Panel (40%): Results Dashboard
+```
+
+**Key Components to Create:**
+- `Header.tsx` - Logo, model selector, export actions
+- `FilterSidebar.tsx` - Progressive disclosure filter system
+- `WorldMap.tsx` - Interactive map with accuracy visualization
+- `ResultsDashboard.tsx` - Metrics and charts
+- `EventModal.tsx` - Individual event details
+
+### 3. Smart Filter System (CRITICAL FEATURE)
+Implement the progressive disclosure filter system with 4 main groups:
+
+**📍 Geographic Filters:**
+- Continental: North America, South America, Europe, Asia, Africa, Oceania  
+- Cultural Region: Western, Eastern, Middle Eastern, African, Latin American
+
+**⏰ Temporal Filters:**
+- Century: Pre-1500, 1500-1699, 1700-1799, 1800-1899, 1900-1999, 2000+
+- Decade: 1500s through 2020s (52 options - implement searchable dropdown)
+- Historical Period: Ancient, Medieval, Renaissance, Industrial, Modern, Contemporary
+
+**🏛️ Event Characteristics:**
+- Primary Category: Military & Warfare, Politics & Government, Science & Technology, Arts & Culture, Disasters & Accidents, Sports & Recreation, Economics & Business, Religion & Philosophy
+- Violence Level: peaceful, violent, catastrophic
+- Scale: local, national, international, global
+- Human Impact: individual, small group, mass population
+
+**🌍 Societal Context:**
+- Development Status: developed, developing
+- Colonial Status: colonial, independent
+- Seasonal: Winter, Spring, Summer, Fall
+
+**Filter Behavior:**
+- Start with collapsed groups showing only category headers
+- Expand on click to reveal sub-filters
+- Show active filter count badges
+- Implement smart suggestions (e.g., selecting century filters decade options)
+- Provide "Clear All" and individual clear options
+
+### 4. Interactive World Map
+Use React-Leaflet to create:
+- World map with country boundaries
+- Color-coded regions based on accuracy rates:
+  - Green (#10b981): High accuracy (80%+)
+  - Yellow (#f59e0b): Medium accuracy (50-80%) 
+  - Red (#ef4444): Low accuracy (<50%)
+  - Gray (#9ca3af): No data
+- Hover tooltips showing accuracy percentage and event count
+- Click handlers for region detail modals
+- Zoom/pan controls and legend
+
+### 5. Results Dashboard
+Create metrics dashboard with:
+- **Key Stats Cards:**
+  - Overall Accuracy percentage
+  - Total Events count  
+  - Average Confidence Score
+- **Charts (using Recharts):**
+  - Accuracy by Category (bar chart)
+  - Confidence Distribution (histogram)
+  - Timeline Analysis (line chart)
+- Real-time updates when filters change
+- Loading skeletons during data processing
+
+### 6. Data Management & State
+Implement efficient data handling:
+
+**Data Loading:**
+```typescript
+// types/data.ts
+interface EventData {
+  model_name: string;
+  event: {
+    text: string;
+    year: number;
+    date: string;
+    primary_category: string;
+    violence_level: string;
+    cultural_region: string;
+    historical_period: string;
+  };
+  question: string;
+  model_response: string;
+  extracted_year: number;
+  is_correct: boolean;
+  confidence_score: number;
+}
+
+// hooks/useData.ts
+const useData = () => {
+  // Load and parse JSON files
+  // Create indexed data structures for fast filtering
+  // Calculate regional accuracy aggregations
+  // Return filtered data based on active filters
+}
+```
+
+**State Management with Zustand:**
+```typescript
+// store/filterStore.ts
+interface FilterState {
+  selectedModel: 'gemma3:1b' | 'gemma3:4b' | 'gemma3:27b';
+  activeFilters: {
+    geographic: string[];
+    temporal: string[];
+    eventCharacteristics: string[];
+    societalContext: string[];
+  };
+  expandedGroups: string[];
+  // Actions
+  setModel: (model: string) => void;
+  toggleFilter: (group: string, filter: string) => void;
+  clearFilters: (group?: string) => void;
+  toggleGroup: (group: string) => void;
+}
+```
+
+### 7. Model Switching & Comparison
+Implement model selection:
+- Header dropdown for Gemma 1B/4B/27B selection
+- Smooth data transitions when switching models
+- Preserve filter state across model changes
+- Loading indicators during model switches
+- Optional: Side-by-side comparison view
+
+### 8. Event Detail System
+Create modal for individual event analysis:
+- Full event text display
+- Ground truth vs model response comparison
+- Correctness indicator (✅/❌) with confidence score
+- All event metadata displayed as badges
+- Navigation controls (previous/next event)
+- Export individual event data functionality
+
+### 9. Responsive Design Implementation
+Follow specification breakpoints:
+
+**Desktop (1024px+):**
+- Full sidebar layout with map and dashboard
+
+**Tablet (768-1023px):**
+- Collapsible sidebar
+- Horizontal scrolling filter groups
+- Bottom drawer for detailed filters
+
+**Mobile (640px and below):**
+- Stacked layout with map as primary focus
+- Bottom sheet for filters
+- Touch-optimized interactions
+- Full-screen modals
+
+### 10. Performance Optimization
+Implement efficient data handling:
+- Lazy loading for non-critical components
+- Virtual scrolling for large result sets
+- Memoization for expensive filter calculations
+- Debounced filter updates (300ms)
+- Bundle splitting for map/chart libraries
+
+### 11. Accessibility Features (WCAG 2.1 AA)
+Ensure compliance:
+- Keyboard navigation for all interactive elements
+- Screen reader support with proper ARIA labels
+- Focus management for modals and dropdowns
+- Alternative data table view for map
+- High contrast mode support
+- Color-blind friendly visualizations
+
+### 12. Animation & Micro-interactions
+Add smooth transitions per specification:
+- Filter expansion/collapse (300ms ease-out)
+- Map region updates (200ms with stagger)
+- Dashboard data updates (400ms ease-in-out)  
+- Modal open/close with backdrop fade
+- Loading states with shimmer effects
+- Hover effects and focus indicators
+
+## Detailed Implementation Steps
+
+### Phase 1: Foundation (Days 1-2)
+1. Set up React TypeScript project with Tailwind CSS
+2. Create basic component structure and routing
+3. Implement data loading utilities and type definitions
+4. Set up Zustand store for state management
+5. Create basic layout components
+
+### Phase 2: Core Features (Days 3-5)
+1. Build smart filter system with progressive disclosure
+2. Integrate React-Leaflet world map with accuracy visualization
+3. Create results dashboard with Recharts integration
+4. Implement model switching functionality
+5. Add data processing and filtering logic
+
+### Phase 3: Advanced Features (Days 6-7)
+1. Add event detail modals with navigation
+2. Implement export functionality (CSV/JSON)
+3. Add responsive design breakpoints
+4. Create loading states and error handling
+5. Add animations and micro-interactions
+
+### Phase 4: Polish & Testing (Days 8-10)
+1. Comprehensive accessibility testing and fixes
+2. Performance optimization and bundle analysis
+3. Cross-browser compatibility testing
+4. User experience refinements
+5. Documentation and deployment preparation
+
+## File Structure
+```
+src/
+├── components/
+│   ├── layout/
+│   │   ├── Header.tsx
+│   │   ├── Layout.tsx
+│   │   └── Sidebar.tsx
+│   ├── filters/
+│   │   ├── FilterGroup.tsx
+│   │   ├── FilterSidebar.tsx
+│   │   └── FilterControls.tsx
+│   ├── map/
+│   │   ├── WorldMap.tsx
+│   │   ├── MapControls.tsx
+│   │   └── MapLegend.tsx
+│   ├── dashboard/
+│   │   ├── ResultsDashboard.tsx
+│   │   ├── MetricCard.tsx
+│   │   └── ChartComponents.tsx
+│   ├── modals/
+│   │   ├── EventModal.tsx
+│   │   └── ExportModal.tsx
+│   └── ui/
+│       ├── Button.tsx
+│       ├── Dropdown.tsx
+│       └── LoadingSpinner.tsx
+├── hooks/
+│   ├── useData.ts
+│   ├── useFilters.ts
+│   └── useMap.ts
+├── store/
+│   ├── filterStore.ts
+│   └── dataStore.ts
+├── types/
+│   ├── data.ts
+│   └── filters.ts
+├── utils/
+│   ├── dataProcessing.ts
+│   ├── mapUtils.ts
+│   └── exportUtils.ts
+└── data/
+    └── filters.json
+```
+
+## Key Technical Considerations
+
+### Data Processing
+- Create efficient indexing for 60+ filter parameters
+- Implement fast filtering algorithms (< 500ms response)
+- Calculate regional accuracy aggregations
+- Handle missing or invalid data gracefully
+
+### Map Integration
+- Optimize for performance with large datasets
+- Handle zoom levels and region boundaries
+- Implement efficient hover/click handlers
+- Provide keyboard navigation alternatives
+
+### Chart Integration
+- Use responsive chart configurations
+- Implement smooth data transitions
+- Handle empty states and edge cases
+- Ensure accessibility compliance
+
+## Success Criteria
+The completed application should:
+✅ Load all three Gemma model datasets (1B, 4B, 27B) correctly
+✅ Provide smooth, responsive filtering across all 60+ parameters
+✅ Display interactive world map with regional accuracy patterns
+✅ Update visualizations in < 500ms for typical filter operations
+✅ Work seamlessly across desktop, tablet, and mobile devices
+✅ Meet WCAG 2.1 AA accessibility standards
+✅ Include comprehensive export functionality
+✅ Handle edge cases and errors gracefully
+
+## Testing Requirements
+- Unit tests for data processing and filter logic
+- Integration tests for user workflows
+- Accessibility testing with screen readers
+- Performance testing with full datasets
+- Cross-browser compatibility verification
+
+Start with the foundation and work systematically through each phase. Focus on creating clean, maintainable code that follows the detailed specification document. Test thoroughly at each step and ensure the application meets all performance and accessibility requirements.
+
+Use the complete specification document (`docs/front-end-spec.md`) as your definitive reference for all design decisions, component specifications, and technical requirements.
